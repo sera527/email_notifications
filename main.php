@@ -33,7 +33,7 @@ class Connector
 
     public function select($limit, array $days)
     {
-        $query ="SELECT * FROM items WHERE status = 2 AND (";
+        $query ="SELECT id, user_id, send, title, link FROM items WHERE status = 2 AND (";
         for($i=1;$i<count($days);$i++)
         {
             $query= $query."(send = $days[$i] AND DAYOFMONTH(publicated_to) = DAYOFMONTH(CURDATE()+".$days[$i-1].")) OR ";
@@ -86,6 +86,8 @@ class MailCreator
                     $d = "день";
                     break;
                 case 2:
+                case 3:
+                case 4:
                     $d = "дня";
                     break;
                 default:
@@ -93,7 +95,7 @@ class MailCreator
                     break;
             }
 
-            $body = "<h1>Здраствуйте!</h1><p>Публикация Вашего объявления <a href=".$result['link'].">".$result['title']."</a> заканчивается через $key $d.</p>";
+            $body = "<h1>Здраствуйте!</h1><p>Публикация Вашего объявления <a href=".$result['link'].">".$result['title']."</a> заканчивается через $key $d.</p><p>Если объявление для вас еще актуально, зайдите на сайт и возобновите его.</p>";
 
 //строку ниже можно раскомментировать, что бы проверить работоспособность скрипта в браузере
 //            echo "<p>to: $to<br>head: $subject<br>body: $body<br></p>";
