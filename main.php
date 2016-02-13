@@ -17,6 +17,11 @@ $days = array(1, 2, 5);//возрастающий массив. дни до ок
 
 new MailCreator($dbtype, $db, $host, $port, $user, $password, $days);
 
+/**
+ * Class Connector
+ * Создает соединение с БД и делает запросы
+ * @author Sergiy Posternak
+ */
 class Connector
 {
     private $PDO;
@@ -31,6 +36,13 @@ class Connector
         return $this->PDO;
     }
 
+    /**
+     * Выбирает только те объявления, по которым нужно отправить email, и сортирует по времени суток от меньшего
+     *
+     * @param $limit int максимальное количество выборки
+     * @param array $days дни до конца публикации, когда нужно отправлять email
+     * @return array результат выборки
+     */
     public function select($limit, array $days)
     {
         $query ="SELECT id, user_id, send, title, link FROM items WHERE status = 2 AND (";
@@ -44,8 +56,47 @@ class Connector
         $result = $this->PDO->query($query);
         return $result->fetchAll();
     }
+
+    /**
+     * Изменяет в БД значение поля "send"
+     *
+     * @param $send int актуальное значене
+     * @param $id int id объявления
+     */
+    public function update($send, $id)
+    {
+        $this->PDO->query("UPDATE items SET send = $send WHERE id = $id;");
+    }
+
+    /**
+     * Подготовка запроса выборки имейлов
+     *
+     * @return PDOStatement
+     */
+    public function prepare()
+    {
+        return $this->PDO->prepare("SELECT email FROM users WHERE id = ? LIMIT 1");
+    }
+
+    /**
+     * Добавляет для каждого элемента массива MailCreator::array поле "email"
+     *
+     * @param $st PDOStatement
+     * @param $userId int
+     */
+    public function selectEmails($st, $userId)
+    {
+        $st->execute(array($userId));
+        $row = $st->fetch();
+        return $row[0];
+    }
 }
 
+/**
+ * Class MailCreator
+ * Формирует и отправляет письма
+ * @author Sergiy Posternak
+ */
 class MailCreator
 {
     private $db;
@@ -58,47 +109,74 @@ class MailCreator
         $this->send($days);
     }
 
+    /**
+     * Возвращает новое значение "send"
+     *
+     * @param $old int старое значение "send"
+     * @param array $days массив дней до окончания, когда нужно отправить email
+     * @return int новое значение "send"
+     */
+    public static function newSendValue($old, array $days)
+    {
+        if($old != 0)
+        {
+            $key = array_search($old, $days);
+            return $days[$key-1];
+        }
+        else
+        {
+            return end($days);
+        }
+    }
+
+    /**
+     * Возвращает правильный падеж слова "дни"
+     *
+     * @param $send int остаток дней публикации
+     * @return string падеж
+     */
+    public static function selectCase($send)
+    {
+        switch($send) {
+            case 1:
+                return "день";
+                break;
+            case 2:
+            case 3:
+            case 4:
+                return "дня";
+                break;
+            default:
+                return "дней";
+                break;
+        }
+    }
+
+    /**
+     * Формирует и отправляет сообщения
+     *
+     * @param array $days дни до окончания, когда нужно отправить email
+     */
     private function send(array $days)
     {
-        $st = $this->db->getConnection()->prepare("SELECT email FROM users WHERE id = ? LIMIT 1");
+        $st = $this->db->prepare();
 
         foreach ($this->array as $i => $result)
         {
-            $st->execute(array($result['user_id']));
-            $row = $st->fetch();
-            $result['email'] = $row[0];
+            $result['email'] = $this->db->selectEmails($st, $result['user_id']);
 
-            if($result['send'] != 0)
-            {
-                $key = array_search($result['send'], $days);
-                $key = $days[$key-1];
-            }
-            else
-            {
-                $key = end($days);
-            }
-            $this->db->getConnection()->query("UPDATE items SET send = $key WHERE id = ".$result['id'].";");
+            $send = self::newSendValue($result['send'], $days);
+
+            $this->db->update($send, $result['id']);
+
             $to = $result['email'];
             $subject = "Срок действия объявления заканчивается!";
 
-            switch($key) {
-                case 1:
-                    $d = "день";
-                    break;
-                case 2:
-                case 3:
-                case 4:
-                    $d = "дня";
-                    break;
-                default:
-                    $d = "дней";
-                    break;
-            }
-
-            $body = "<h1>Здраствуйте!</h1><p>Публикация Вашего объявления <a href=".$result['link'].">".$result['title']."</a> заканчивается через $key $d.</p><p>Если объявление для вас еще актуально, зайдите на сайт и возобновите его.</p>";
+            $d = self::selectCase($send);
+            $body = "<h1>Здраствуйте!</h1><p>Публикация Вашего объявления <a href=".$result['link'].">".$result['title']."</a> заканчивается через $send $d.</p><p>Если объявление для вас еще актуально, зайдите на сайт и возобновите его.</p>";
 
 //строку ниже можно раскомментировать, что бы проверить работоспособность скрипта в браузере
-//            echo "<p>to: $to<br>head: $subject<br>body: $body<br></p>";
+            echo "<p>to: $to<br>head: $subject<br>body: $body<br></p>";
             mail($to, $subject, $body);
         }
     }
