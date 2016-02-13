@@ -116,7 +116,7 @@ class MailCreator
      * @param array $days массив дней до окончания, когда нужно отправить email
      * @return int новое значение "send"
      */
-    public static function newSendValue($old, array $days)
+    private function newSendValue($old, array $days)
     {
         if($old != 0)
         {
@@ -135,7 +135,7 @@ class MailCreator
      * @param $send int остаток дней публикации
      * @return string падеж
      */
-    public static function selectCase($send)
+    private function selectCase($send)
     {
         switch($send) {
             case 1:
@@ -165,14 +165,14 @@ class MailCreator
         {
             $result['email'] = $this->db->selectEmails($st, $result['user_id']);
 
-            $send = self::newSendValue($result['send'], $days);
+            $send = $this->newSendValue($result['send'], $days);
 
             $this->db->update($send, $result['id']);
 
             $to = $result['email'];
             $subject = "Срок действия объявления заканчивается!";
 
-            $d = self::selectCase($send);
+            $d = $this->selectCase($send);
             $body = "<h1>Здраствуйте!</h1><p>Публикация Вашего объявления <a href=".$result['link'].">".$result['title']."</a> заканчивается через $send $d.</p><p>Если объявление для вас еще актуально, зайдите на сайт и возобновите его.</p>";
 
 //строку ниже можно раскомментировать, что бы проверить работоспособность скрипта в браузере
